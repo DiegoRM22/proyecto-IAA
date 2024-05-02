@@ -1,67 +1,65 @@
-import csv
+import re
 
-import os
-from collections import Counter
-import math
-
-# Aumentar el límite del tamaño del campo CSV
-csv.field_size_limit(sys.maxsize)
-
-def count_words(emails):
-    word_count = Counter()
-    for _, email_text, _ in emails:
-        tokens = preprocess_text(email_text)
-        word_count.update(tokens)
-    return word_count
-
-def calculate_smoothed_log_probability(word_count, total_words):
-    vocab_size = len(word_count)
-    smoothed_log_probs = {}
-    for word, count in word_count.items():
-        smoothed_prob = (count + 1) / (total_words + vocab_size)
-        smoothed_log_prob = math.log(smoothed_prob)
-        smoothed_log_probs[word] = smoothed_log_prob
-    return smoothed_log_probs
-
-def write_model_file(corpus_type, num_documents, total_words, smoothed_log_probs, output_dir):
-    file_path = os.path.join(output_dir, f"modelo_{corpus_type}.txt")
-    with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(f"Numero de documentos (noticias) del corpus: {num_documents}\n")
-        file.write(f"Número de palabras del corpus: {total_words}\n")
-        for word, count in sorted(smoothed_log_probs.items()):
-            file.write(f"Palabra: {word} Frec: {word_count[word]} LogProb: {count}\n")
-
-def generate_model_files(emails, vocabulary_file, output_dir):
-    with open(vocabulary_file, 'r', encoding='utf-8') as vocab_file:
-        vocabulary = [line.strip() for line in vocab_file]
-
-    num_documents = len(emails)
-    word_count = count_words(emails)
-    total_words = sum(word_count.values())
-    smoothed_log_probs = calculate_smoothed_log_probability(word_count, total_words)
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    for corpus_type in ['P', 'S']:
-        write_model_file(corpus_type, num_documents, total_words, smoothed_log_probs, output_dir)
-
-def read_emails(file_path):
+def separate_emails(file_path):
     emails = []
-    total_words = 0
-    with open(file_path, 'r', encoding='utf-8') as file:
-        reader = csv.reader(file, delimiter=';')
-        for row in reader:
-            if len(row) >= 3:
-                email_info = (row[0].strip(), row[1].strip(), row[2].strip())
-                word_count = len(row[1].strip().split())  # Contar palabras en el mensaje
-                total_words += word_count
-                emails.append(email_info)
-    print("Total de palabras en todos los correos:", total_words)
+    number_found = False
+    message_found = False
+    type_found = False
+    message = ""
+    kind = ""
+    number = ""
+    with open(file_path, 'r') as file:
+        # Lee todo el documento entero y mételo en un string
+        data = file.read()
+    
+    # Cada vez que aparezca un número en data y un ;, así 1001; convertir en ;1001;
+    er = re.compile(r'^(\d+);')
+    data = er.sub(r';\1;', data)
+    data = data.split(';')
+    # Eliminar los 3 primeros elementos de la lista
+    data = data[3:]
+
+    counter = 1
+    number = 0
+    email = ""
+    kind = ""
+    for word in data:
+        #esperar entrada del usuario
+        # print("contador: ", counter)
+        if counter == 1:
+            # print("cogiendo email")
+            email = word
+            counter += 1
+        elif counter == 2:
+            # print("cogiendo tipo")
+            kind = word
+            # Eliminar los 2 ultimos caracteres
+            # Buscar la palabra Safe o Phishing
+            er = re.compile(r'Safe')
+            if er.search(kind):
+                kind = "Safe Email"
+            else:
+                kind = "Phishing Email"
+            counter = 1
+            # Añadir el correo a la lista de correos
+            # print("Añadiendo correo")
+            emails.append((number, email, kind))
+            number += 1
+
     return emails
 
-# Llamada a la función para obtener los correos
-emails = read_emails("PHI_train.csv")
 
-# Llamada a la función para generar los archivos modelo
-generate_model_files(emails, "vocabulary.txt", "model_files")
+    
+def main():
+    file_path = "PHI_train.csv"
+    emails = separate_emails(file_path)
+    counter = 0
+    for email in emails:
+        counter += 1
+        print(email[2])
+    
+    print("Total de correos: ", counter)
+
+
+if __name__ == "__main__":
+    main()

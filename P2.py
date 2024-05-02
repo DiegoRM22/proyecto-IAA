@@ -25,6 +25,9 @@ def calculate_frequencies(emails, word):
         frequency += email[1].count(word)
     return frequency
 
+safeCounter = 0
+phishingCounter = 0
+
 def generate_model_file(emails, corpus_type):
     output_file = f"modelo_{corpus_type}.txt"
     with open(output_file, 'w', encoding='utf-8') as out_file:
@@ -34,6 +37,10 @@ def generate_model_file(emails, corpus_type):
             if email[2] == corpus_type:
                 words_count += len(email[1].split())
                 filtered_emails.append(email)
+                if corpus_type == "Phishing Email":
+                    phishingCounter += 1
+                else:
+                    safeCounter += 1
 
         out_file.write(f"Numero de documentos (noticias) del corpus: {len(filtered_emails)}\n")
         out_file.write(f"Número de palabras del corpus: {words_count}\n")
@@ -58,5 +65,54 @@ def generate_model_files(emails):
 # Llamada a la función para obtener los correos
 emails = read_emails("PHI_train.csv")
 
+# Eliminar el primer correo
+emails.pop(0)
+
 # Llamada a la función para generar los archivos modelo
-generate_model_files(emails)
+# HAY QUE QUITAR EL PRIMER EMAIL -> ES LA DESCRIPCION
+# generate_model_files(emails)
+
+
+def probWordByModel(word, model):
+    with open(model, 'r', encoding='utf-8') as file:
+        next(file)
+        next(file)
+        for line in file:
+            line = line.strip()
+            if line.startswith(f"Palabra: {word}"):
+                parts = line.split()
+                # Retornar valor truncado a 2 decimales
+                return round(float(parts[-1]), 2)
+    return 0.0
+
+def probEmailByModel(email, model):
+    words = email.split()
+    log_prob = 0.0  # Inicializar la probabilidad en 0.0 en forma logarítmica
+    for word in words:
+        log_prob_word = probWordByModel(word, model)
+        # Si la palabra no está en el modelo, ignorarla
+        log_prob += log_prob_word
+    # Redondear la probabilidad final a 2 decimales
+    return round(log_prob, 2)
+    
+
+
+print(probWordByModel("password", "modelo_Phishing Email.txt"))
+print(probWordByModel("password", "modelo_Safe Email.txt"))
+
+print ("numer de correos phishing: ", phishingCounter)
+print ("numer de correos safe: ", safeCounter)
+
+print(math.log(0.4088))
+print(math.log(0.3106))
+
+print(emails[4][2])
+print(probEmailByModel(emails[4][1], "modelo_Phishing Email.txt") + (math.log(0.3106)))
+print(probEmailByModel(emails[4][1], "modelo_Safe Email.txt") + (math.log(0.4088)))
+
+
+
+
+
+# Ahora hay que clasificar los correos.
+# Para ello, se debe calcular la probabilidad de que un correo sea phishing o seguro.
