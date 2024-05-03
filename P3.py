@@ -1,42 +1,127 @@
 import csv
 import sys
 import math
+import re
+import csv
+import re
+import string
+from itertools import islice
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from spellchecker import SpellChecker
+
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+
+def preprocess_text(text):
+    # Convertir texto a minúsculas
+    text = text.lower()
+    # Eliminación de signos de puntuación
+    text = re.sub('[' + string.punctuation + ']', '', text)
+    # Tokenización de palabras
+    tokens = word_tokenize(text)
+    # Eliminación de stopwords
+    stop_words = set(stopwords.words('english'))  # Puedes cambiar 'spanish' por otro idioma si es necesario
+    tokens = [word for word in tokens if word not in stop_words]
+    # Eliminación de URLs y etiquetas HTML
+    tokens = [word for word in tokens if not re.match(r'^https?:\/\/.*[\r\n]*', word)]
+    tokens = [word for word in tokens if not re.match(r'^<.*?>', word)]
+    # Corrección ortográfica
+    spell = SpellChecker(language='en')
+    corrected_tokens = [spell.correction(word) for word in tokens]
+    return corrected_tokens
 
 csv.field_size_limit(sys.maxsize)
 
-def read_emails(file_path, max_emails=10000):
-    emails = {}
-    total_words = 0
-    last_line = None  # Variable para almacenar la última línea
-    with open(file_path, 'r', encoding='utf-8') as file:
-        reader = csv.reader(file, delimiter=';')
-        next(reader)  # Saltar la primera fila
-        email_count = 0
-        for row in reader:
-            if email_count >= max_emails:
-                break
-            if len(row) >= 3:
-                email_info = {"subject": row[0].strip(), "message": row[1].strip(), "type": row[2].strip()}
-                word_count = len(row[1].strip().split())
-                total_words += word_count
-                emails[email_info["subject"]] = email_info
-                email_count += 1
-            last_line = row  # Almacenar la última línea en cada iteración
-    print("Total de palabras en los primeros 10,000 correos electrónicos:", total_words)
-    print("Número de correos electrónicos capturados:", len(emails))
-    if last_line:
-        print("Última línea del archivo CSV:", last_line)
-    else:
-        print("El archivo CSV está vacío o no se capturaron correos electrónicos.")
+def separate_emails(file_path):
+    emails = []
+    number_found = False
+    message_found = False
+    type_found = False
+    message = ""
+    kind = ""
+    number = ""
+    with open(file_path, 'r') as file:
+        # Lee todo el documento entero y mételo en un string
+        data = file.read()
+    
+    # Cada vez que aparezca un número en data y un ;, así 1001; convertir en ;1001;
+    er = re.compile(r'^(\d+);')
+    data = er.sub(r';\1;', data)
+    data = data.split(';')
+    # Eliminar los 3 primeros elementos de la lista
+    data = data[3:]
+
+    counter = 1
+    number = 0
+    email = ""
+    kind = ""
+    for word in data:
+        #esperar entrada del usuario
+        # print("contador: ", counter)
+        if counter == 1:
+            # print("cogiendo email")
+            email = word
+            counter += 1
+        elif counter == 2:
+            # print("cogiendo tipo")
+            kind = word
+            # Eliminar los 2 ultimos caracteres
+            # Buscar la palabra Safe o Phishing
+            er = re.compile(r'Safe')
+            if er.search(kind):
+                kind = "Safe Email"
+            else:
+                kind = "Phishing Email"
+            counter = 1
+            # Añadir el correo a la lista de correos
+            # print("Añadiendo correo")
+            emails.append((number, email, kind))
+            number += 1
+
     return emails
 
 
 
 def calculate_frequencies(emails, word):
     frequency = 0
-    for email in emails.values():
-        frequency += email["message"].count(word)
+    for email in emails:
+        frequency += email[1].count(word)
     return frequency
+
+import math
+
+# def generate_model_file(emails, corpus_type):
+#     phishingCounter = 0
+#     output_file = f"modelo_{corpus_type}.txt"
+#     with open(output_file, 'w', encoding='utf-8') as out_file:
+#         words_count = 0
+#         filtered_emails = {}
+#         count = 0
+#         for email in emails:
+#             count += 1
+#             if email[2] == corpus_type:
+#                 words_count += len(email[1].split())
+#                 filtered_emails[email[0]] = email
+#                 if corpus_type == "Phishing Email":
+#                     phishingCounter += 1
+
+#         out_file.write(f"Numero de documentos (noticias) del corpus: {len(filtered_emails)}\n")
+#         out_file.write(f"Número de palabras del corpus: {words_count}\n")
+
+#         input_file = "vocabulary.txt"
+#         with open(input_file, 'r', encoding='utf-8') as vocab_file:
+#             next(vocab_file)
+#             line_counter = 0
+#             for line in vocab_file:
+#                 line_counter += 1
+#                 print(f"Procesando palabra {line_counter}")
+#                 word = line.strip()
+#                 frequency = calculate_frequencies(emails, word)
+#                 smoothed_prob = (frequency + 1) / (words_count + len(filtered_emails))
+#                 smoothed_log_prob = math.log(smoothed_prob)
+#                 out_file.write(f"Palabra: {word} Frec: {frequency} LogProb: {smoothed_log_prob}\n")
 
 def generate_model_file(emails, corpus_type):
     phishingCounter = 0
@@ -44,10 +129,12 @@ def generate_model_file(emails, corpus_type):
     with open(output_file, 'w', encoding='utf-8') as out_file:
         words_count = 0
         filtered_emails = {}
-        for email in emails.values():
-            if email["type"] == corpus_type:
-                words_count += len(email["message"].split())
-                filtered_emails[email["subject"]] = email
+        count = 0
+        for email in emails:
+            count += 1
+            if email[2] == corpus_type:
+                words_count += len(email[1].split())
+                filtered_emails[email[0]] = email
                 if corpus_type == "Phishing Email":
                     phishingCounter += 1
 
@@ -60,23 +147,26 @@ def generate_model_file(emails, corpus_type):
             line_counter = 0
             for line in vocab_file:
                 line_counter += 1
+                print(f"Procesando palabra {line_counter}")
                 word = line.strip()
-                frequency = calculate_frequencies(filtered_emails, word)
+                frequency = calculate_frequencies(emails, word)
                 smoothed_prob = (frequency + 1) / (words_count + len(filtered_emails))
                 smoothed_log_prob = math.log(smoothed_prob)
                 out_file.write(f"Palabra: {word} Frec: {frequency} LogProb: {smoothed_log_prob}\n")
+
+# Función calculate_frequencies() no proporcionada en tu código, asegúrate de incluirla
+
 
 def generate_model_files(emails):
     for corpus_type in ["Phishing Email", "Safe Email"]:
         generate_model_file(emails, corpus_type)
 
-emails = read_emails("PHI_train.csv")
+emails = separate_emails("PHI_train.csv")
 #imprimir los numeros de correos
-for number in emails.keys():
-    print(number)
-# test_emails
-print("train", len(emails))
-# print("test", len(test_emails))
+test_emails = separate_emails("PHI_test.csv")
+
+original_emails = separate_emails("PHI_train_original.csv")
+print("Originales: ", len(original_emails))
 
 
 # generate_model_files(emails)
@@ -91,6 +181,11 @@ def create_model_hash(model_file):
             parts = line.split()
             word = parts[1]  # La palabra está en el segundo campo
             log_prob = float(parts[-1])  # El log está en el último campo
+            # Sumar la probabilidad de la clase Safe o Phishing
+            if model_file == "modelo_Phishing Email.txt":
+                log_prob += math.log(5914 / 15000)
+            else:
+                log_prob += math.log(9086 / 15000)
             model_hash[word] = log_prob
     return model_hash
 
@@ -117,27 +212,40 @@ def probEmailByModel(email, model):
             log_prob += probWordByModel(word, safe_model_hash)
     return round(log_prob, 2)
 
-# with open("clasificacion_alu0101464992.txt", 'a', encoding='utf-8') as out_file:
-#     count = 0
-#     for email_info in test_emails.values():
-#         count += 1
-#         print(f"Procesando email {count}")
-#         phishing_prob = probEmailByModel(email_info["message"], "modelo_Phishing Email.txt")
-#         safe_prob = probEmailByModel(email_info["message"], "modelo_Safe Email.txt")
-#         clasification = "Phishing Email" if phishing_prob > safe_prob else "Safe Email"
-#         words = email_info["message"].split()[:10]
-#         text = ' '.join(words)
-#         out_file.write(f"{text} {safe_prob}, {phishing_prob}, {clasification}\n")
+classifications = []
 
-if emails:  # Verifica si el diccionario no está vacío
-    ultima_clave = list(emails.keys())[3673]  # Obtiene la última clave (asunto del correo)
-    ultimo_correo = emails[ultima_clave]  # Obtiene la información del último correo
-    print("Último correo:")
-    print("Asunto:", ultimo_correo["subject"])
-    print("Mensaje:", ultimo_correo["message"])
-    print("Tipo:", ultimo_correo["type"])
-else:
-    print("El diccionario de correos está vacío.")
+with open("clasificacion_alu0101464992.txt", 'a', encoding='utf-8') as out_file:
+    count = 0
+    for test_email in test_emails:
+        count += 1
+        print(f"Procesando email {count}")
+        phishing_prob = probEmailByModel(test_email[1], "modelo_Phishing Email.txt")
+        safe_prob = probEmailByModel(test_email[1], "modelo_Safe Email.txt")
+        clasification = "Phishing Email" if phishing_prob > safe_prob else "Safe Email"
+        words = test_email[1].split()[:10]
+        text = ' '.join(words)
+        classifications.append(clasification)
+        out_file.write(f"{text} {safe_prob}, {phishing_prob}, {clasification}\n")
+
+def calculate_accuracy(test_emails, classifications):
+    correct = 0
+    for i in range(len(test_emails)):
+        print(f"Comparando {test_emails[i][2]} con {classifications[i]}")
+        if test_emails[i][2] == classifications[i]:
+            correct += 1
+    return correct / len(test_emails)
+
+def print_results(classifications):
+    with open("resumen_alu0101464992.txt", 'w', encoding='utf-8') as out_file:
+        for classification in classifications:
+            out_file.write(f"{classification[0]}\n")
+    
+
+accuracy = calculate_accuracy(test_emails, classifications)
+print_results(classifications)
+print(f"Accuracy: {accuracy}")
+print("Percent accuracy: ", accuracy * 100, "%")
+
 
 
 print(len(emails))
