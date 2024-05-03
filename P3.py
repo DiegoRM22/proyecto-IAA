@@ -34,54 +34,76 @@ def preprocess_text(text):
 
 csv.field_size_limit(sys.maxsize)
 
-def separate_emails(file_path):
-    emails = []
-    number_found = False
-    message_found = False
-    type_found = False
-    message = ""
-    kind = ""
-    number = ""
-    with open(file_path, 'r') as file:
-        # Lee todo el documento entero y mételo en un string
-        data = file.read()
+# def separate_emails(file_path):
+#     emails = []
+#     number_found = False
+#     message_found = False
+#     type_found = False
+#     message = ""
+#     kind = ""
+#     number = ""
+#     with open(file_path, 'r') as file:
+#         # Lee todo el documento entero y mételo en un string
+#         data = file.read()
     
-    # Cada vez que aparezca un número en data y un ;, así 1001; convertir en ;1001;
-    er = re.compile(r'^(\d+);')
-    data = er.sub(r';\1;', data)
-    data = data.split(';')
-    # Eliminar los 3 primeros elementos de la lista
-    data = data[3:]
+#     # Cada vez que aparezca un número en data y un ;, así 1001; convertir en ;1001;
+#     er = re.compile(r'^(\d+);')
+#     data = er.sub(r';\1;', data)
+#     data = data.split(';')
+#     # Eliminar los 3 primeros elementos de la lista
+#     data = data[3:]
 
-    counter = 1
-    number = 0
-    email = ""
-    kind = ""
-    for word in data:
-        #esperar entrada del usuario
-        # print("contador: ", counter)
-        if counter == 1:
-            # print("cogiendo email")
-            email = word
-            counter += 1
-        elif counter == 2:
-            # print("cogiendo tipo")
-            kind = word
-            # Eliminar los 2 ultimos caracteres
-            # Buscar la palabra Safe o Phishing
-            er = re.compile(r'Safe')
-            if er.search(kind):
-                kind = "Safe Email"
-            else:
-                kind = "Phishing Email"
-            counter = 1
-            # Añadir el correo a la lista de correos
-            # print("Añadiendo correo")
-            emails.append((number, email, kind))
-            number += 1
+#     counter = 1
+#     number = 0
+#     email = ""
+#     kind = ""
+#     for word in data:
+#         #esperar entrada del usuario
+#         # print("contador: ", counter)
+#         if counter == 1:
+#             # print("cogiendo email")
+#             email = word
+#             counter += 1
+#         elif counter == 2:
+#             # print("cogiendo tipo")
+#             kind = word
+#             # Eliminar los 2 ultimos caracteres
+#             # Buscar la palabra Safe o Phishing
+#             er = re.compile(r'Safe')
+#             if er.search(kind):
+#                 kind = "Safe Email"
+#             else:
+#                 kind = "Phishing Email"
+#             counter = 1
+#             # Añadir el correo a la lista de correos
+#             # print("Añadiendo correo")
+#             emails.append((number, email, kind))
+#             number += 1
 
+#     return emails
+
+def read_emails(file_path):
+    emails = []
+    total_words = 0
+    with open(file_path, 'r', encoding='utf-8') as file:
+        reader = csv.reader(file, delimiter=';')
+        for row in reader:
+            if len(row) >= 3:
+                email_info = (row[0].strip(), row[1].strip(), row[2].strip())
+                word_count = len(row[1].strip().split())  # Contar palabras en el mensaje
+                total_words += word_count
+                emails.append(email_info)
+    print("Total de palabras en todos los correos:", total_words)
     return emails
 
+def addAleatoryKinf(file_path):
+    # Añadir al final de cada linea ;Phishing Email
+    with open(file_path, 'r') as file:
+        data = file.read()
+        data = data.split('\n')
+        with open("PH_test_actualizado.csv", 'w') as out_file:
+            for line in data:
+                out_file.write(line + ";Phishing Email\n")
 
 
 def calculate_frequencies(emails, word):
@@ -92,36 +114,6 @@ def calculate_frequencies(emails, word):
 
 import math
 
-# def generate_model_file(emails, corpus_type):
-#     phishingCounter = 0
-#     output_file = f"modelo_{corpus_type}.txt"
-#     with open(output_file, 'w', encoding='utf-8') as out_file:
-#         words_count = 0
-#         filtered_emails = {}
-#         count = 0
-#         for email in emails:
-#             count += 1
-#             if email[2] == corpus_type:
-#                 words_count += len(email[1].split())
-#                 filtered_emails[email[0]] = email
-#                 if corpus_type == "Phishing Email":
-#                     phishingCounter += 1
-
-#         out_file.write(f"Numero de documentos (noticias) del corpus: {len(filtered_emails)}\n")
-#         out_file.write(f"Número de palabras del corpus: {words_count}\n")
-
-#         input_file = "vocabulary.txt"
-#         with open(input_file, 'r', encoding='utf-8') as vocab_file:
-#             next(vocab_file)
-#             line_counter = 0
-#             for line in vocab_file:
-#                 line_counter += 1
-#                 print(f"Procesando palabra {line_counter}")
-#                 word = line.strip()
-#                 frequency = calculate_frequencies(emails, word)
-#                 smoothed_prob = (frequency + 1) / (words_count + len(filtered_emails))
-#                 smoothed_log_prob = math.log(smoothed_prob)
-#                 out_file.write(f"Palabra: {word} Frec: {frequency} LogProb: {smoothed_log_prob}\n")
 
 def generate_model_file(emails, corpus_type):
     phishingCounter = 0
@@ -161,12 +153,16 @@ def generate_model_files(emails):
     for corpus_type in ["Phishing Email", "Safe Email"]:
         generate_model_file(emails, corpus_type)
 
-emails = separate_emails("PHI_train.csv")
+#emails = separate_emails("PHI_train.csv")
 #imprimir los numeros de correos
-test_emails = separate_emails("PHI_test.csv")
+test_emails = read_emails("PH_test_actualizado.csv")
 
-original_emails = separate_emails("PHI_train_original.csv")
-print("Originales: ", len(original_emails))
+# addAleatoryKinf("PHtest_final.csv")
+
+print(test_emails[-2])
+
+# original_emails = separate_emails("PHI_train_original.csv")
+# print("Originales: ", len(original_emails))
 
 
 # generate_model_files(emails)
@@ -225,28 +221,27 @@ with open("clasificacion_alu0101464992.txt", 'a', encoding='utf-8') as out_file:
         words = test_email[1].split()[:10]
         text = ' '.join(words)
         classifications.append(clasification)
-        out_file.write(f"{text} {safe_prob}, {phishing_prob}, {clasification}\n")
+        out_file.write(f"{text}, {safe_prob}, {phishing_prob}, {clasification}\n")
 
 def calculate_accuracy(test_emails, classifications):
     correct = 0
     for i in range(len(test_emails)):
-        print(f"Comparando {test_emails[i][2]} con {classifications[i]}")
+        # print(f"Comparando {test_emails[i][2]} con {classifications[i]}")
         if test_emails[i][2] == classifications[i]:
             correct += 1
     return correct / len(test_emails)
 
 def print_results(classifications):
-    with open("resumen_alu0101464992.txt", 'w', encoding='utf-8') as out_file:
+    with open("resumen_alu0101464992_control.txt", 'w', encoding='utf-8') as out_file:
         for classification in classifications:
             out_file.write(f"{classification[0]}\n")
     
 
 accuracy = calculate_accuracy(test_emails, classifications)
 print_results(classifications)
-print(f"Accuracy: {accuracy}")
-print("Percent accuracy: ", accuracy * 100, "%")
+# print(f"Accuracy: {accuracy}")
+# print("Percent accuracy: ", accuracy * 100, "%")
 
 
 
-print(len(emails))
-
+# print(len(emails)
